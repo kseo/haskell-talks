@@ -11,28 +11,21 @@ Hash table!
 
 BUT, the hash table is founded upon the destructive update makes it hard to use with pure code
 
-* Persistent map
+* Persistent maps in Haskell
 
-One that implements a non-destructive update
-
-1. Data.Map
-
-- Let n and m be the number of elements in a map
-- O(log n) lookups, inserts, updates and deletes. O(n+m) unions, differences and intersections
-
-2. Data.IntMap
-
-- Let n and m be the number of elements in a map, and W be the number of bits in a machine-sized integer (e.g. 32 or 64)
-- O(min(n,W)) lookups, inserts, updates and deletes. O(n+m) unions, differences and intersections
-
-* containers
-
--  The keys in a map, or the elements of a set must be an instance of `Ord`
+- One that implements a non-destructive update
+- Data.Map is the most commonly used map type
+- Implemented using size balanced trees
+- Keys can be any type that can be ordered
 
   insert :: Ord k => k -> a -> Map k a -> Map k a
   insert :: Ord a => a -> Set a -> Set a
 
-- Indicate some type of balanced tree is used
+* Performance of Data.Map
+
+- O(log n) comparisons
+- Many common types are expensive to compare. e.g., `String`, `ByteString` and `Text`
+- Given a string of length `k`, O(k * log n) comparisons to look up an entry
 
 * hashable
 
