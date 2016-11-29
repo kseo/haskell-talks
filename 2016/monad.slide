@@ -28,7 +28,7 @@ kwangyul.seo@gmail.com
 
 - T ∶ 𝔸 ⟶ 𝔸 (base functor)
 - η ∶ id𝔸 ⟶ T (unit)
-- μ ∶ T  ⟶ T (operator)
+- μ ∶ T^2 ⟶ T (operator)
 
 Monad laws
 
