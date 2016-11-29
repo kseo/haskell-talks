@@ -17,12 +17,23 @@ kwangyul.seo@gmail.com
 
 * Why Monad?
 
-.image monad/usage.png 400 _
+- Add impure features to pure languages without interfering with the ability to reason about program behavior
+- Provide an abstract mechanism to reduce the plumbing overhead of writing functional programs by encapsulating it into an abstract type and dealing it in a uniform way
 
 * Why Monad?
 
-- Add impure features to pure languages without interfering with the ability to reason about program behavior
-- Provide an abstract mechanism to reduce the plumbing overhead of writing functional programs by encapsulating it into an abstract type and dealing it in a uniform way
+.image monad/usage.png 400 _
+
+* Monad Definition in Mathematics
+
+- T ∶ 𝔸 ⟶ 𝔸 (base functor)
+- η ∶ id𝔸 ⟶ T (unit)
+- μ ∶ T  ⟶ T (operator)
+
+Monad laws
+
+- (T⋅⋅η)⋅μ = id  = (η⋅⋅T)⋅μ
+- (T⋅⋅μ)⋅μ = (μ⋅⋅T)⋅μ
 
 * Monad Definition in Haskell
 
