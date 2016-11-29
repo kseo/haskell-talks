@@ -15,9 +15,14 @@ kwangyul.seo@gmail.com
 
 .image monad/definition.png 250 _
 
-* Why do we need Monad?
+* Why Monad?
 
 .image monad/usage.png 400 _
+
+* Why Monad?
+
+- Add impure features to pure languages without interfering with the ability to reason about program behavior
+- Provide an abstract mechanism to reduce the plumbing overhead of writing functional programs by encapsulating it into an abstract type and dealing it in a uniform way
 
 * Monad Definition in Haskell
 
