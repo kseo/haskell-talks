@@ -1,0 +1,246 @@
+Origami Programming
+
+Kwang Yul Seo
+Haskell School
+@kwangyulseo
+kwangyul.seo@gmail.com
+
+* Direct Recursion
+
+.image origami/quote.png 200 _
+
+* Definition of List
+
+  data List a = Nil | Cons a (List a)
+
+  wrap :: a -> List a
+  wrap x = Cons x Nil
+
+  nil :: List a -> Bool
+  nil Nil         = True
+  nil (Cons x xs) = False
+
+* Definition of Tree
+
+  data T a = L a | B (T a) (T a)
+    deriving (Show)
+
+* List fold
+
+  foldL :: (a -> b -> b) -> b -> List a -> b
+  foldL f e Nil = e
+  foldL f e (Cons x xs) = f x (foldL f e xs)
+
+Note L represents List, not Left.
+
+List functions:
+
+  sumL = foldL (+) 0
+  productL = foldL (*) 1
+  reverseL = foldL (\a r -> r ++ [a]) []
+
+* Tree fold
+
+  foldT :: (b -> b -> b) -> (a -> b) -> (T a -> b)
+  foldT _ l (L a)   = l a
+  foldT b l (B s t) = b (foldT b l s) 
+                        (foldT b l t) 
+
+Tree functions:
+
+  productT = foldT (*) id
+
+* Direct Recursion vs fold
+
+- Direct recursion (assembly)
+
+  fact0 0 = 1
+  fact0 n = n * fact (n - 1)
+
+- Fold (structure programming)
+
+  fact1 n = product [1..n]
+  
+* What's common between foldL and foldT?
+
+* Expr
+
+Expr is a recursive type
+
+  data Expr = Const Int
+            | Add Expr Expr
+            | Mul Expr Expr
+
+After removing recursion:
+
+  data ExprF a = Const Int
+              | Add a a
+              | Mul a a
+
+* Fix
+
+  newtype Fix f = In (f (Fix f))
+  
+The type of In is 
+
+  In :: f (Fix f) -> Fix f
+
+* Definition of Expr using Fix
+
+  data Expr = Fix ExprF
+
+  val :: Fix ExprF
+  val = In (Const 12)
+
+  testExpr = In $ (In $ (In $ Const 2) `Add` 
+                  (In $ Const 3)) `Mul` (In $ Const 4)
+
+* Functor Definition of ExprF
+
+  instance Functor ExprF where
+      fmap eval (Const i) = Const i
+      fmap eval (left `Add` right) = 
+        (eval left) `Add` (eval right)
+      fmap eval (left `Mul` right) = 
+        (eval left) `Mul` (eval right)
+
+* Algorithm
+
+  alg :: ExprF Int -> Int
+  alg (Const i)   = i
+  alg (x `Add` y) = x + y
+  alg (x `Mul` y) = x * y
+
+Or,
+
+  alg' :: ExprF String -> String
+  alg' (Const i)   = [chr (ord 'a' + i)]
+  alg' (x `Add` y) = x ++ y
+  alg' (x `Mul` y) = 
+    concat [[a,b] | a <- x, b <- y]
+
+Here, Int and String are carrier types
+
+* F-Algebra
+
+  type Algebra f a = f a -> a
+
+Algebra consists of
+
+- Functor
+- Carrier type
+- Evaluator
+
+* Algebra
+
+  type SimpleA = Algebra ExprF Int
+
+  -- alg :: SimpleA
+  alg :: ExprF Int -> Int
+  alg (Const i)   = i
+  alg (x `Add` y) = x + y
+  alg (x `Mul` y) = x * y
+
+* Initial Algebra
+
+Use (Fix ExprF) as a carrier type instead of String or Int
+
+  type ExprInitAlg = Algebra ExprF (Fix ExprF)
+
+  -- ex_init_alg :: ExprInitAlg
+  ex_init_alg :: ExprF (Fix ExprF) -> Fix ExprF
+  ex_init_alg = In
+
+e.g.,
+
+  > ex_init_alg $ Add (In $ Const 2) (In $ Const 3)
+  In $ Add (In $ Const 2) (In $ Const 3)
+
+Initial algebra is isomorphism: No loss of information
+
+* Homomorphism
+
+- Initial algebra -> other algebra
+
+  g :: Fix f -> a
+
+.image origami/homomorphism.png 200 _
+
+* Catamorphism
+
+  unFix :: Fix f -> f (Fix f)
+  unFix (In x) = x
+
+.image origami/catamorphism.png 200 _
+
+  g :: Fix f -> a
+  g = alg . (fmap g) . unFix
+
+By defining g = cata alg,
+
+  cata :: Functor f => (f a -> a) -> Fix f -> a
+  cata alg = alg . fmap (cata alg) . unFix
+
+* Eval using cata
+
+  type SimpleA = Algebra ExprF Int
+
+  alg :: SimpleA
+  alg (Const i)   = i
+  alg (x `Add` y) = x + y
+  alg (x `Mul` y) = x * y
+  
+  eval :: Fix ExprF -> Int
+  eval = alg . fmap eval . unFix
+
+* List Revisited
+
+  data ListF a b = Nil | Cons a b
+
+  instance Functor (ListF a) where
+      fmap f Nil = Nil
+      fmap f (Cons e x) = Cons e (f x)
+
+  algSum :: ListF Int Int -> Int
+  algSum Nil = 0
+  algSum (Cons e acc) = e + acc
+
+  lst :: Fix (ListF Int)
+  lst = In $ Cons 2 (In $ Cons 3 (In $ Cons 4 (In Nil)))
+
+  cata algSum lst
+  == foldr (\e acc -> e + acc) 0 [2..4]
+
+* Tree Revisited
+
+  data TreeF a b = L a | B b b
+    deriving (Show)
+
+  instance Functor (TreeF a) where
+      fmap f (L a)   = L a
+      fmap f (B x y) = B (f x) (f y)
+
+  algSum :: TreeF Int Int -> Int
+  algSum (L a) = a
+  algSum (B x y) = x + y
+
+  type IntTree = Fix (TreeF Int)
+
+  l :: Int -> IntTree
+  l x = In (L x)
+  b :: IntTree -> IntTree -> IntTree
+  b x y = In (x `B` y)
+
+  tree :: IntTree
+  tree = ((l 1) `b` (l 2)) `b` (l 3)
+
+  > cata algSum tree
+  6
+
+* References
+
+1. Origami programming, Jeremy Gibbons
+.link https://www.cs.ox.ac.uk/jeremy.gibbons/publications/origami.pdf
+
+2. Understanding F-Algebras
+.link https://bartoszmilewski.com/2013/06/10/understanding-f-algebras/
