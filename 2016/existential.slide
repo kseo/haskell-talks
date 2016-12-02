@@ -1,0 +1,141 @@
+Existential Types
+
+Kwang Yul Seo
+Haskell School
+@kwangyulseo
+kwangyul.seo@gmail.com
+
+* Existential type
+
+Pseudo-code
+
+  T = ∃a. { x :: a
+          , f :: a -> Int
+          }
+
+Existentially quantified means that there exists some type `a`, which we may choose when we construct a value of existential type
+
+* Value construction
+
+  { x = 1,     f = \n -> n + 2 }                 (a = Int)
+  { x = False, f = \b -> if b then 1 else 0 }    (a = Bool)
+  { x = 'c',   f = \c -> ord c }                 (a = Char)
+
+all three values belong to the same existential type T
+
+Existentially typed values consist of two components:
+
+- a type component
+- a term component
+
+The type component is called hidden representation type or witness type
+
+* Value usage
+
+  use (T x f) = ???
+
+We can't know the type of `x`. But we can apply `f` to `x` to obtain an `Int`.
+
+  use :: T -> Int
+  use (T x f) = f x
+
+Existential types = Abstract data types
+
+- Hide implementation details
+- Provide only a certain set of allowed operations
+
+* Haskell Example
+
+  {-# LANGUAGE ExistentialQuantification #-}
+
+  data Counter = forall a. MkCounter
+    a           -- new
+    (a -> a)    -- inc
+    (a -> Int)  -- get
+
+Int counter
+
+  intCounter :: Counter
+  intCounter = MkCounter
+    0     -- new
+    (+1)  -- inc
+    id    -- get
+
+List counter
+
+  listCounter :: Counter
+  listCounter = MkCounter
+    []       -- new
+    (() :)   -- inc
+    length   -- get
+
+* Haskell Example
+
+  test :: Counter -> Int
+  test (MkCounter new inc get) = get $ inc $ inc $ new
+
+  *Main> test intCounter
+  2
+  *Main> test listCounter
+  2
+
+* Type Assignment
+
+  test (MkCounter new inc get) = ...
+
+The type checker assignes a fresh type variable:
+
+  new :: c1
+  inc :: c1 -> c1
+  get :: c1 -> Int
+
+* Constrained Existentials using Type Classes
+
+  data ShowBox = forall a. Show a => ShowBox a
+  
+  instance Show ShowBox where
+     show (ShowBox v) = show v
+   
+  boxList :: [ShowBox]
+  boxList = [ ShowBox 1
+            , ShowBox False
+            , ShowBox [1,2,3]
+            ]
+
+is equivalent to
+
+  data ShowBox2 = forall a. ShowBox2
+    a             -- value
+    (a -> String) -- show operation
+
+  boxList2 :: [ShowBox2]
+  boxList2 = [ ShowBox2 1 show
+            , ShowBox2 False show
+            , ShowBox2 [1,2,3] show
+            ]
+
+* Why forall?
+
+Curry-Howard isomorphism to the rescue!
+
+  (∃a. F(a)) -> T ⇔ ∀a. (F(a) -> T)
+
+So,
+
+  C1 :: (exists a. F a) -> T
+  ⇔
+  C2 :: forall a. (F a -> T)
+
+* Existentials in GHC
+
+- Turn of `ExistentialQuantification` pragma on GHC
+- forall keyword is necessary while declaring existentials, you can’t omit 
+
+  data Box = Box a
+
+is invalid
+
+* References
+
+1. Existential types and data abstraction
+.link http://iveselov.info/posts/2012-08-30-existential-types.html
