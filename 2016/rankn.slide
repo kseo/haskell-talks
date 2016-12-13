@@ -1,0 +1,141 @@
+Rank-N Types
+
+Kwang Yul Seo
+Haskell School
+@kwangyulseo
+kwangyul.seo@gmail.com
+
+* Monomorphism
+
+  intId :: Integer -> Integer
+  intId x = x
+
+  doubleId :: Double -> Double
+  doubleId x = x
+
+* Polymorphism (Rank 1)
+
+- Parametric polymorphism
+- Also known as, generics
+- Add safety through *parametricity*
+
+  id :: a -> a
+  id x = x
+
+Instantiate the type variable `a` to `Integer`:
+
+  id (3 :: Integer)
+
+Or to `Int` and `String`:
+
+  print (id (3 :: Integer),
+         id "blah")
+
+* Explicit forall
+
+Make universal quantification explicit using `forall` keyword:
+
+  {-# LANGUAGE RankNTypes #-}
+
+  id :: forall a. a -> a
+  id x = x
+
+* Higher-rank polymorphism (Rank 2 or more)
+
+  type IdFunc = forall a. a -> a
+
+  id :: IdFunc
+  id x = x
+
+  someInt :: IdFunc -> Integer
+  someInt id' = id' 3
+
+expands to
+
+  someInt :: (forall a. a -> a) -> Integer
+
+* Rank 3 Polymorphism
+
+  type SomeInt = IdFunc -> Integer
+
+  someOtherInt :: SomeInt -> Integer
+  someOtherInt someInt' =
+      someInt' id + someInt' id
+
+  someOtherInt :: ((forall a. a -> a) -> Integer) -> Integer
+
+* List
+
+Regular list as a sum type:
+
+  data List a
+      = Cons a (List a)
+      | Nil
+
+Pattern matching combinator `uncons`:
+
+  uncons :: (a -> List a -> r) -> r -> List a -> r
+  uncons co ni (Cons x xs) = co x xs
+  uncons co ni Nil         = ni
+
+e.g.,
+
+  listNull :: List a -> Bool
+  listNull = uncons (\_ _ -> False) True
+
+  listMap :: (a -> b) -> List a -> List b
+  listMap f =
+      uncons (\x xs -> Cons (f x) (listMap f xs))
+             Nil
+
+* Scott encoding
+
+Represent a list in terms of its `uncons` operator:
+
+  newtype ListS a =
+      ListS {
+        unconsS :: forall r. (a -> ListS a -> r) -> r -> r
+      }
+
+  unconsS :: ListS a -> (forall r. (a -> ListS a -> r) -> r -> r)
+  unconsS :: ListS a -> (a -> ListS a -> r) -> r -> r
+
+Constructors:
+
+  nilS :: ListS a
+  nilS = ListS (\co ni -> ni)
+
+  consS :: a -> ListS a -> ListS a
+  consS x xs = ListS (\co ni -> co x xs)
+
+* Scott encoding
+
+Make the list argument be the last argument for convenience:
+
+  unconsS' :: (a -> ListS a -> r) -> r -> ListS a -> r
+  unconsS' co ni (ListS f) = f co ni
+
+Functor instance:
+
+  instance Functor ListS where
+      fmap f =
+          unconsS' (\x xs -> consS (f x) (fmap f xs))
+                   nilS
+
+What is it Rank2?
+
+  ListS :: (forall r. (a -> ListS a -> r) -> r -> r) -> ListS a
+
+* GADT and Rank2
+
+Only Rank2Types is necessary to implement GADTs in the absence of language support for GADTs
+
+.link http://www.haskellforall.com/2012/06/gadts.html
+
+* References
+
+1. 24 Days of GHC Extensions: Rank N Types
+.link https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html
+
+2. GADTs
+.link http://www.haskellforall.com/2012/06/gadts.html
