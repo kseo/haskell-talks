@@ -126,6 +126,18 @@ What is it Rank2?
 
   ListS :: (forall r. (a -> ListS a -> r) -> r -> r) -> ListS a
 
+* runST
+
+`ST` type embeds a stateful imperative program into a regular pure Haskell program safely
+
+  writeSTRef :: STRef s a -> a -> ST s ()
+
+What does `s` mean here?
+
+  runST :: (forall s. ST s a) -> a
+
+The type-checker enforces that you cannot leak stateful resources out of the ST action.
+
 * GADT and Rank2
 
 Only Rank2Types is necessary to implement GADTs in the absence of language support for GADTs
