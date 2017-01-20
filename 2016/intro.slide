@@ -256,7 +256,7 @@ List argument names have `s` suffix
   add' :: Int -> (Int -> Int)
   add' x y = x + y
 
-* Partial Function
+* Partial Application
 
 Partially apply arguments and get a new function which accepts the remaining arguments
 
