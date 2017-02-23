@@ -6,6 +6,14 @@ To install the present tool, use go get:
 
 ## Talks
 
+### 2017
+
+* [Coroutine][coroutine]
+
+[coroutine]: http://go-talks.appspot.com/github.com/kseo/haskell-talks/2017/coroutine.slide#1
+
+### 2016
+
 * [Introduction to Haskell][intro]
 * [What is Monad?][monad]
 * [unordered-containers, Efficient hashing-based container types][hamt]

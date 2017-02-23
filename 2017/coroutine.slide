@@ -1,0 +1,250 @@
+Coroutine Pipelines
+
+Kwang Yul Seo
+Haskell School
+@kwangyulseo
+kwangyul.seo@gmail.com
+
+* The problem
+
+  replicateM :: Monad m => Int -> m a -> m [a]
+  mapM :: Monad m => (a -> m b) -> [a] -> m [b]
+  sequence :: Monad m => [m a] -> m [a]
+
+- Does not work on infinite lists
+- You can't consume any results until everything has been processed
+- You have to run the entire computation, even if you don't need every result
+- This wastes memory by buffering every result
+
+* Non-solution: Lazy IO
+
+- Only works for IO
+- Only works for effectful sources, not effectful sinks or transformations
+- Invalidates equational reasoning by tying effects to evaluation order
+- Admission of defeat ("Monads are too awkward")
+
+* Haskell coroutine libraries
+
+- pipes
+- conduit
+- machines
+
+* Coroutine type
+
+- More commonly known as the free monad transformer
+- Unifies every coroutine implementation into a single pattern
+
+* Trampolining
+
+  *Main> let hello = do { lift (putStr "Hello, ")
+                        ; pause
+                        ; lift (putStrLn "World!") }
+  *Main> run hello
+  Hello, World!
+
+--
+
+  *Main> do { Left continuation <- bounce hello
+            ; putStr "Wonderful "
+            ; run continuation }
+  Hello, Wonderful World!
+
+* Trampoline Monad Transformer
+
+  {-# LANGUAGE FlexibleContexts, Rank2Types, ScopedTypeVariables #-}
+  import Control.Monad (liftM)
+  import Control.Monad.Trans (MonadTrans (...))
+
+  newtype Trampoline m r = Trampoline {
+    bounce :: m (Either (Trampoline m r) r)
+  }
+
+  instance Monad m ⇒ Monad (Trampoline m) where
+    return = Trampoline ◦ return ◦ Right
+    t >>= f = Trampoline (bounce t
+                          >>= either
+                            (return ◦ Left ◦ (>>=f))
+                            (bounce ◦ f))
+
+  instance MonadTrans Trampoline where
+    lift = Trampoline ◦ liftM Right
+
+  pause :: Monad m ⇒ Trampoline m ()
+  pause = Trampoline (return $ Left $ return ())
+
+  run :: Monad m ⇒ Trampoline m r → m r
+  run t = bounce t >>= either run return
+
+* mzipWith
+
+- Run multiple interleaved computations
+- Trampoline computations are an effective way to implement *coroutines*
+
+  mzipWith :: Monad m
+           ⇒ (a → b → c)
+           → Trampoline m a → Trampoline m b → Trampoline m c
+  mzipWith f t1 t2 = Trampoline (liftM2 bind (bounce t1 ) (bounce t2))
+  where
+    bind (Left a) (Left b) = Left (mzipWith f a b)
+    bind (Left a) (Right b) = Left (mzipWith f a (return b))
+    bind (Right a) (Left b) = Left (mzipWith f (return a) b)
+    bind (Right a) (Right b) = Right (f a b)
+
+  interleave :: Monad m ⇒ [Trampoline m r] → Trampoline m [r]
+  interleave = foldr (mzipWith (:)) (return [])
+
+--
+
+  *Main> run $ interleave [hello, hello, hello]
+  Hello, Hello, Hello, World!
+  World!
+  World!
+  [(),(),()]
+
+* Generator
+
+- A limited form of coroutine
+- Became a part of JavaScript, Python and Ruby
+- Like a regular trampoline except it yields a value whenever it suspends
+
+  *Main> let gen = do { lift (putStr "Yielding one, ")
+                      ; yield 1
+                      ; lift (putStr "then two, ")
+                      ; yield 2
+                      ; lift (putStr "returning three: ")
+                      ; return 3 }
+  *Main> runGenerator gen
+  Yielding one, then two, returning three: ([1,2],3)
+
+* Generator Monad Transformer
+
+  newtype Generator a m x = Generator {
+    bounceGen :: m (Either (a, Generator a m x) x)
+  }
+
+  instance Monad m ⇒ Monad (Generator a m) where
+    return = Generator ◦ return ◦ Right
+    t >>= f = Generator (bounceGen t
+                        >>= either
+                          (λ(a, cont) →
+                            return $ Left (a, cont >>= f))
+                          (bounceGen ◦ f))
+
+  instance MonadTrans (Generator a) where
+    lift = Generator ◦ liftM Right
+
+  yield :: Monad m ⇒ a → Generator a m ()
+  yield a = Generator (return $ Left (a, return ()))
+
+  runGenerator :: Monad m ⇒ Generator a m x → m ([a ], x )
+  runGenerator = run' id where
+    run' f g = bounceGen g
+               >>= either
+                (λ(a, cont) → run' (f ◦ (a:)) cont)
+                (λx → return (f [], x ))
+
+* Iteratee
+
+- A monad transformer dual to generators
+- Suspension demands a value instead of yielding it
+
+  *Main> let iter = do { lift (putStr "Enter two numbers: ")
+                       ; a <- await
+                       ; b <- await
+                       ; lift (putStrLn ("sum is " ++ show (a + b))) }
+  *Main> runIteratee [4, 5] iter
+  Enter two numbers: sum is 9
+
+
+* Iteratee Monad Transformer
+
+  newtype Iteratee a m x = Iteratee {
+    bounceIter :: m (Either (a → Iteratee a m x ) x )
+  }
+
+  instance Monad m ⇒ Monad (Iteratee a m) where
+    return = Iteratee ◦ return ◦ Right
+    t >>= f = Iteratee (bounceIter t
+                       >>= either
+                        (λcont → return $ Left ((>>=f ) ◦ cont))
+                        (bounceIter ◦ f ))
+
+  instance MonadTrans (Iteratee a) where
+    lift = Iteratee ◦ liftM Right
+
+  await :: Monad m ⇒ Iteratee a m a
+  await = Iteratee (return $ Left return)
+
+  runIteratee :: Monad m ⇒ [a ] → Iteratee a m x → m x
+  runIteratee (a : rest) i = bounceIter i
+                             >>= either
+                              (λcont → runIteratee rest (cont a))
+                              return
+
+  runIteratee [ ] i = bounceIter i
+                      >>= either
+                        (λcont → runIteratee []
+                          (cont $ error "No more values to feed."))
+                        return
+
+* Generalizing the suspension type
+
+Only the first argument of the Either constructor is different.
+
+- Trampoline: plain resumption
+- Generator: (x, resumption)
+- Iteratee: x -> resumption
+
+All three are functors.
+
+* Coroutine Monad Transformer
+
+  newtype Coroutine s m r = Coroutine {
+    resume :: m (Either (s (Coroutine s m r)) r)
+  }
+
+  instance (Functor s, Monad m) ⇒ Monad (Coroutine s m) where
+    return x = Coroutine (return (Right x ))
+    t >>= f = Coroutine (resume t
+                        >>= either
+                          (return ◦ Left ◦ fmap (>>=f))
+                          (resume ◦ f))
+
+  instance Functor s ⇒ MonadTrans (Coroutine s) where
+    lift = Coroutine ◦ liftM Right
+
+  suspend :: (Monad m, Functor s) ⇒ s (Coroutine s m x ) → Coroutine s m x
+  suspend s = Coroutine (return (Left s))
+
+- s: the functor type for wrapping the resumption
+- m: the base monad type
+- r: the monad's return type
+
+* Redefining examples in terms of Coroutine
+
+  import Data.Functor.Identity (Identity (. .))
+
+  type Trampoline m x = Coroutine Identity m x
+  type Generator a m x = Coroutine ((,) a) m x
+  type Iteratee a m x = Coroutine ((→) a) m x
+
+  pause :: Monad m ⇒ Trampoline m ()
+  pause = suspend (Identity $ return ())
+
+  yield :: (Monad m, Functor ((,) x )) ⇒ x → Generator x m ()
+  yield x = suspend (x , return ())
+
+  await :: (Monad m, Functor ((,) x )) ⇒ Iteratee x m x
+  await = suspend return
+
+* References
+
+1. The Monad.Reader Issue 19: Coroutine Pipelines
+.link https://themonadreader.files.wordpress.com/2011/10/issue19.pdf
+
+2. Introductions to advanced Haskell topics
+.link http://www.haskellforall.com/2014/03/introductions-to-advanced-haskell-topics.html
+
+3. CS240h lecture notes: 10. Pipes
+.link http://www.scs.stanford.edu/14sp-cs240h/slides/pipes-slides.html
+
